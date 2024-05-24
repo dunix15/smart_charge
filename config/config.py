@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     battery_max_power_kw: float = 5.0
     battery_min_soc: float = 0.3
     voltage: float = 245.0
+    smart_charge_interval_minutes: int = 5
     charging_state_file: str = "data/charging_state.json"
     tesla_vin: str = ""
     tesla_key_name: str = ""

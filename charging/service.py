@@ -20,6 +20,14 @@ class ChargingService:
         self.charging_state_file = Path(settings.charging_state_file)
         self.charging_state = self.fetch_charging_state()
 
+    @property
+    def charging_amps(self) -> int:
+        return self.charging_state.get("charging_amps", 0)
+
+    @property
+    def charging_stopped(self) -> bool:
+        return self.charging_state.get("charging_stopped", False)
+
     def fetch_charging_state(self) -> dict[str, any]:
         if self.charging_state_file.exists():
             with open(self.charging_state_file, "r") as file:
@@ -42,16 +50,18 @@ class ChargingService:
             inverter_data.production_kw + settings.battery_max_power_kw, settings.inverter_max_power_kw
         )
 
-        available_power_kw = max_available_power_kw - inverter_data.consumption_kw
+        net_consumption_kw = inverter_data.consumption_kw - self.charging_amps * settings.voltage * 3 / 1000
+
+        available_power_kw = max_available_power_kw - net_consumption_kw
 
         logger.info(f"Available power: {available_power_kw} kW")
 
         new_amps = self.calculate_new_amps(available_power_kw)
 
-        if new_amps <= 0:
+        if new_amps < 3:
             self.stop_charging()
         else:
-            if self.charging_state.get("charging_stopped", False):
+            if self.charging_stopped:
                 self.start_charging()
 
             self.set_charging_amps(new_amps)
@@ -61,7 +71,7 @@ class ChargingService:
     def run_in_background(self):
         while True:
             self.smart_charge()
-            time.sleep(60)
+            time.sleep(60 * settings.smart_charge_interval_minutes)
 
     @staticmethod
     def calculate_new_amps(available_power_kw: float) -> int:
@@ -80,7 +90,7 @@ class ChargingService:
         subprocess.run(command, shell=True, check=True)
 
     def set_charging_amps(self, amps: int):
-        if self.charging_state.get("charging_amps", 0) == amps:
+        if self.charging_amps == amps:
             return
 
         logger.info(f"Setting charging amps to: {amps}")
@@ -89,16 +99,16 @@ class ChargingService:
         self.run_command(command)
 
     def stop_charging(self):
-        if self.charging_state.get("charging_stopped", False):
+        if self.charging_stopped:
             return
 
         logger.info("Stopping charging")
-        self.charging_state["charging_stopped"] = True
+        self.charging_state = {"charging_amps": 0, "charging_stopped": True}
         command = "charging-stop"
         self.run_command(command)
 
     def start_charging(self):
-        if not self.charging_state.get("charging_stopped", False):
+        if not self.charging_stopped:
             return
 
         logger.info("Starting charging")
