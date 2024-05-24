@@ -1,16 +1,11 @@
 import json
 import subprocess
-from datetime import datetime, timezone
-from typing import List, Dict
 
 from config.config import settings
 from inverter.schema import InverterData
 
 
 class InverterService:
-    def __init__(self):
-        self.data_history: List[Dict[str, InverterData]] = []
-
     @staticmethod
     def run_command() -> str:
         result = subprocess.run(
@@ -31,20 +26,15 @@ class InverterService:
     def parse_output(output: str) -> InverterData:
         data = json.loads(output)
         inverter_data = InverterData(
-            battery_level_percent=data["battery_level_percent"],
-            charging_discharging_power=data["charging_discharging_power_map"]["value"],
-            load_power=data["load_power_map"]["value"],
-            power_grid_power=data["power_grid_power_map"]["value"],
-            pv_power=data["pv_power_map"]["value"],
+            production_kw=data["pv_power_map"]["value"],
+            net_import_kw=data["power_grid_power_map"]["value"],
+            consumption_kw=data["load_power_map"]["value"],
+            battery_discharge_kw=data["charging_discharging_power_map"]["value"],
+            battery_soc=data["battery_level_percent"] / 100,
         )
         return inverter_data
-
-    def store_data(self, data: InverterData):
-        timestamp = datetime.now(timezone.utc).isoformat()
-        self.data_history.append({timestamp: data})
 
     def fetch_data(self) -> InverterData:
         output = self.run_command()
         inverter_data = self.parse_output(output)
-        self.store_data(inverter_data)
         return inverter_data

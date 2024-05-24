@@ -2,8 +2,12 @@ from pydantic import BaseModel
 
 
 class InverterData(BaseModel):
-    battery_level_percent: float
-    charging_discharging_power: float
-    load_power: float
-    power_grid_power: float
-    pv_power: float
+    """
+    Schema compatible with charge hq push API
+    https://chargehq.net/kb/push-api
+    """
+    production_kw: float
+    net_import_kw: float
+    consumption_kw: float
+    battery_discharge_kw: float
+    battery_soc: float
