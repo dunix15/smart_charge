@@ -10,12 +10,17 @@ from inverter.service import InverterService
 
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 log = logging.getLogger(__name__)
 
 
 class ChargingService:
-    def __init__(self, dry_run: bool = False):
+    def __init__(self, use_battery: bool = True, dry_run: bool = False):
+        self.use_battery = use_battery
         self.dry_run = dry_run
         self.inverter_service = InverterService()
         self.state_file = Path(settings.charging_state_file)
@@ -47,7 +52,7 @@ class ChargingService:
         log.info(f"Fetched inverter data: {inverter_data}")
 
         available_max_power_kw = inverter_data.production_kw
-        if inverter_data.battery_soc > settings.battery_min_soc:
+        if self.use_battery and inverter_data.battery_soc > settings.battery_min_soc:
             available_max_power_kw += settings.battery_max_power_kw
 
         available_max_power_kw = min(available_max_power_kw, settings.inverter_max_power_kw)
