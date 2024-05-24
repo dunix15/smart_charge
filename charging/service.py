@@ -39,7 +39,7 @@ class ChargingService:
 
     def save_charging_state(self):
         with open(self.state_file, "w") as file:
-            json.dump(self.state.dict(), file)
+            json.dump(self.state.dict(), file, indent=4)
 
         log.info(f"Saved charging state: {self.state}")
 
