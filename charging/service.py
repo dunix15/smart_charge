@@ -52,7 +52,7 @@ class ChargingService:
 
         available_max_power_kw = min(available_max_power_kw, settings.inverter_max_power_kw)
 
-        net_consumption_kw = inverter_data.consumption_kw - self.state.amps * settings.voltage * 3 / 1000
+        net_consumption_kw = max(inverter_data.consumption_kw - self.state.amps * settings.voltage * 3 / 1000, 0)
 
         available_power_kw = available_max_power_kw - net_consumption_kw
 
