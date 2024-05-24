@@ -1,6 +1,7 @@
 import json
 import logging
 import subprocess
+import time
 from pathlib import Path
 
 from config.config import settings
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class ChargingService:
-    def __init__(self, dry_run: bool):
+    def __init__(self, dry_run: bool = False):
         self.inverter_service = InverterService()
         self.dry_run = dry_run
         self.charging_state_file = Path(settings.charging_state_file)
@@ -56,6 +57,11 @@ class ChargingService:
             self.set_charging_amps(new_amps)
 
         self.save_charging_state()
+
+    def run_in_background(self):
+        while True:
+            self.smart_charge()
+            time.sleep(60)
 
     @staticmethod
     def calculate_new_amps(available_power_kw: float) -> int:
