@@ -48,7 +48,10 @@ class ChargingService:
 
         net_consumption_kw = inverter_data.consumption_kw - self.state.amps * settings.voltage * 3 / 1000
 
-        available_power_kw = inverter_data.production_kw + settings.battery_max_power_kw - net_consumption_kw
+        available_power_kw = inverter_data.production_kw - net_consumption_kw
+        if inverter_data.battery_soc > settings.battery_min_soc:
+            available_power_kw += inverter_data.battery_discharge_kw
+
         available_power_kw = min(available_power_kw, settings.inverter_max_power_kw)
 
         log.info(f"Available power: {available_power_kw} kW")
