@@ -94,12 +94,12 @@ class ChargingService:
 
         log.info(f"Running command: {command}")
         command = f"tesla-control -ble -vin {settings.tesla_vin} -key-name  {settings.tesla_key_name} {command}"
-        subprocess.run(command, shell=True, check=True)
+        try:
+            subprocess.run(command, shell=True, check=True, timeout=19)
+        except subprocess.TimeoutExpired:
+            log.info("Command timed out, car might be unreachable")
 
     def set_charging_amps(self, amps: int):
-        if self.state.amps == amps:
-            return
-
         log.info(f"Setting charging amps to: {amps}")
         self.state.amps = amps
         self.state.is_active = True
@@ -114,7 +114,10 @@ class ChargingService:
         self.state.amps = 0
         self.state.is_active = False
         command = "charging-stop"
-        self.run_command(command)
+        try:
+            self.run_command(command)
+        except subprocess.CalledProcessError:
+            log.info("Failed to stop charging, charging already stopped")
 
     def start_charging(self):
         if self.state.is_active:
@@ -123,4 +126,7 @@ class ChargingService:
         log.info("Starting charging")
         self.state.is_active = True
         command = "charging-start"
-        self.run_command(command)
+        try:
+            self.run_command(command)
+        except subprocess.CalledProcessError:
+            log.info("Failed to start charging, charging already started")
