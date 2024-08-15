@@ -47,13 +47,7 @@ Copy the Ps ID of the device you want to monitor (second column, e.g. 1234567)
 PS_ID=1234567
 ```
 
-### Run the service
+### Run the FastAPI server
 ```
-python3 main.py
+uvicorn app:app --host 0.0.0.0 --reload 
 ```
-
-#### Sample output
-```
-battery_level_percent=62.2 charging_discharging_power=-5.33 load_power=0.253 power_grid_power=-0.419 pv_power=6.002
-```
-

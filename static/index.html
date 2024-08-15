@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Charging State Control</title>
+    <link href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 300px;
+        }
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .toggle-label {
+            margin-right: 1rem;
+            font-weight: 600;
+        }
+        .toggle-switch input {
+            display: none;
+        }
+        .toggle-switch label {
+            display: block;
+            position: relative;
+            cursor: pointer;
+            background-color: #ddd;
+            border-radius: 9999px;
+            width: 50px;
+            height: 28px;
+            transition: background-color 0.3s;
+        }
+        .toggle-switch label:before {
+            content: "";
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: white;
+            border-radius: 50%;
+            top: 4px;
+            left: 4px;
+            transition: transform 0.3s;
+        }
+        .toggle-switch input:checked + label {
+            background-color: #48c774;
+        }
+        .toggle-switch input:checked + label:before {
+            transform: translateX(22px);
+        }
+        @media (max-width: 768px) {
+            .chart-container {
+                height: 200px; /* Adjust height for mobile */
+            }
+            .box {
+                margin-bottom: 0; /* Remove margin below the box */
+            }
+        }
+    </style>
+</head>
+<body>
+    <section class="section">
+        <div class="container">
+            <h1 class="title has-text-centered">Charging State Control</h1>
+
+            <div class="columns is-mobile">
+                <div class="column is-12">
+                    <div class="chart-container">
+                        <canvas id="energyFlowChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="box">
+                <h2 class="subtitle">Control Panel</h2>
+                <div class="toggle-container">
+                    <span class="toggle-label">Is Active</span>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="is_active">
+                        <label for="is_active"></label>
+                    </div>
+                </div>
+                <div class="toggle-container">
+                    <span class="toggle-label">Use Battery</span>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="use_battery">
+                        <label for="use_battery"></label>
+                    </div>
+                </div>
+                <div class="content">
+                    <p><strong>Amps:</strong> <span id="amps">0</span></p>
+                    <p><strong>Is Charging:</strong> <span id="is_charging">No</span></p>
+                    <p><strong>State of Charge (SoC):</strong> <span id="soc">0%</span></p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        async function fetchState() {
+            const response = await fetch('/state');
+            const state = await response.json();
+            document.getElementById('is_active').checked = state.is_active;
+            document.getElementById('use_battery').checked = state.use_battery;
+            document.getElementById('amps').innerText = state.amps;
+            document.getElementById('is_charging').innerText = state.is_charging ? 'Yes' : 'No';
+            return state;
+        }
+
+        async function fetchInverterData() {
+            const response = await fetch('/inverter-data');
+            const inverterData = await response.json();
+            return inverterData;
+        }
+
+        async function updateState() {
+            const is_active = document.getElementById('is_active').checked;
+            const use_battery = document.getElementById('use_battery').checked;
+
+            try {
+                const response = await fetch('/state', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ is_active, use_battery })
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Error:', errorText);
+                }
+            } catch (error) {
+                console.error('Network error:', error);
+            }
+        }
+
+        function renderChart(inverterData) {
+            const ctx = document.getElementById('energyFlowChart').getContext('2d');
+            const data = {
+                labels: ['Production', 'Net Import', 'Consumption', 'Battery Discharge'],
+                datasets: [{
+                    label: 'Energy Flow (kW)',
+                    data: [
+                        inverterData.production_kw,
+                        inverterData.net_import_kw,
+                        inverterData.consumption_kw,
+                        inverterData.battery_discharge_kw
+                    ],
+                    backgroundColor: [
+                        '#4CAF50',
+                        '#FFC107',
+                        '#03A9F4',
+                        '#FF5722'
+                    ],
+                    borderColor: [
+                        '#388E3C',
+                        '#FF6F00',
+                        '#0288D1',
+                        '#D32F2F'
+                    ],
+                    borderWidth: 1
+                }]
+            };
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: data,
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(tooltipItem) {
+                                    return tooltipItem.label + ': ' + tooltipItem.raw + ' kW';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                callback: function(value) { return value + ' kW'; }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        async function refreshData() {
+            const state = await fetchState();
+            const inverterData = await fetchInverterData();
+            document.getElementById('soc').innerText = `${(inverterData.battery_soc * 100).toFixed(1)}%`;
+            renderChart(inverterData);
+        }
+
+        document.getElementById('is_active').addEventListener('change', updateState);
+        document.getElementById('use_battery').addEventListener('change', updateState);
+
+        // Initial load
+        refreshData();
+
+        // Auto-refresh every 10 seconds
+        setInterval(refreshData, 10000);
+    </script>
+</body>
+</html>

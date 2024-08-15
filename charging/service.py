@@ -11,17 +11,13 @@ from inverter.service import InverterService
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
 )
 log = logging.getLogger(__name__)
 
 
 class ChargingService:
-    def __init__(self, use_battery: bool = True, dry_run: bool = False):
-        self.use_battery = use_battery
-        self.dry_run = dry_run
+    def __init__(self):
         self.inverter_service = InverterService()
         self.state_file = Path(settings.charging_state_file)
         self.state: ChargingState = self.fetch_state()
@@ -34,12 +30,16 @@ class ChargingService:
                 return ChargingState(**state)
 
         return ChargingState(
-            inverter_data=None, amps=self.calculate_new_amps(settings.inverter_max_power_kw), is_active=True
+            inverter_data=None,
+            amps=self.calculate_new_amps(settings.inverter_max_power_kw),
+            is_charging=False,
+            is_active=False,
+            use_battery=True,
         )
 
     def save_charging_state(self):
         with open(self.state_file, "w") as file:
-            json.dump(self.state.dict(), file, indent=4)
+            json.dump(self.state.model_dump(), file, indent=4)
 
         log.info(f"Saved charging state: {self.state}")
 
@@ -52,7 +52,7 @@ class ChargingService:
         log.info(f"Fetched inverter data: {inverter_data}")
 
         available_max_power_kw = inverter_data.production_kw
-        if self.use_battery and inverter_data.battery_soc > settings.battery_min_soc:
+        if self.state.use_battery and inverter_data.battery_soc > settings.battery_min_soc:
             available_max_power_kw += settings.battery_max_power_kw
 
         available_max_power_kw = min(available_max_power_kw, settings.inverter_max_power_kw)
@@ -68,7 +68,7 @@ class ChargingService:
         if new_amps < 3:
             self.stop_charging()
         else:
-            if not self.state.is_active:
+            if not self.state.is_charging:
                 self.start_charging()
 
             self.set_charging_amps(new_amps)
@@ -88,7 +88,7 @@ class ChargingService:
         return max(0, max_amps)  # Ensure amps are non-negative
 
     def run_command(self, command: str):
-        if self.dry_run:
+        if not self.state.is_active:
             log.info(f"Would run command: {command}")
             return
 
@@ -102,17 +102,17 @@ class ChargingService:
     def set_charging_amps(self, amps: int):
         log.info(f"Setting charging amps to: {amps}")
         self.state.amps = amps
-        self.state.is_active = True
+        self.state.is_charging = True
         command = f"charging-set-amps {amps}"
         self.run_command(command)
 
     def stop_charging(self):
-        if not self.state.is_active:
+        if not self.state.is_charging:
             return
 
         log.info("Stopping charging")
         self.state.amps = 0
-        self.state.is_active = False
+        self.state.is_charging = False
         command = "charging-stop"
         try:
             self.run_command(command)
@@ -120,11 +120,11 @@ class ChargingService:
             log.info("Failed to stop charging, charging already stopped")
 
     def start_charging(self):
-        if self.state.is_active:
+        if self.state.is_charging:
             return
 
         log.info("Starting charging")
-        self.state.is_active = True
+        self.state.is_charging = True
         command = "charging-start"
         try:
             self.run_command(command)
