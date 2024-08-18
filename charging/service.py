@@ -29,13 +29,7 @@ class ChargingService:
                 state = json.load(file)
                 return ChargingState(**state)
 
-        return ChargingState(
-            inverter_data=None,
-            amps=self.calculate_new_amps(settings.inverter_max_power_kw),
-            is_charging=False,
-            is_active=False,
-            use_battery=True,
-        )
+        return ChargingState(inverter_data=self.inverter_service.fetch_data())
 
     def save_charging_state(self):
         with open(self.state_file, "w") as file:
@@ -51,20 +45,15 @@ class ChargingService:
         self.state.inverter_data = inverter_data
         log.info(f"Fetched inverter data: {inverter_data}")
 
-        available_max_power_kw = inverter_data.production_kw
-        if self.state.use_battery and inverter_data.battery_soc > settings.battery_min_soc:
-            available_max_power_kw += settings.battery_max_power_kw
+        if self.state.is_active:
+            self.adjust_charging()
 
-        available_max_power_kw = min(available_max_power_kw, settings.inverter_max_power_kw)
+        self.save_charging_state()
 
-        net_consumption_kw = max(inverter_data.consumption_kw - self.state.amps * settings.voltage * 3 / 1000, 0)
+    def adjust_charging(self):
+        log.info(f"Available power: {self.state.available_power_kw}")
 
-        available_power_kw = available_max_power_kw - net_consumption_kw
-
-        log.info(f"Available power: {available_power_kw} kW")
-
-        new_amps = self.calculate_new_amps(available_power_kw)
-
+        new_amps = self.calculate_new_amps(self.state.available_power_kw)
         if new_amps < 3:
             self.stop_charging()
         else:
@@ -73,16 +62,8 @@ class ChargingService:
 
             self.set_charging_amps(new_amps)
 
-        self.save_charging_state()
-
-    def run_in_background(self):
-        while True:
-            self.smart_charge()
-            time.sleep(60)
-
-    @staticmethod
-    def calculate_new_amps(available_power_kw: float) -> int:
-        voltage = settings.voltage
+    def calculate_new_amps(self, available_power_kw: float) -> int:
+        voltage = self.state.voltage
         max_amps = int((available_power_kw * 1000) / 3 / voltage)
         log.info(f"Calculated new amps: {max_amps}A for available power: {available_power_kw} kW")
         return max(0, max_amps)  # Ensure amps are non-negative
