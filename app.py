@@ -65,6 +65,7 @@ def update_state(data: UpdateStateModel):
         service.stop_charging()
 
     if not service.state.is_active and data.is_active:
+        service.state.is_active = True
         service.adjust_charging()
 
     for field, val in data:
