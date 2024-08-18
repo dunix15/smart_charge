@@ -76,6 +76,7 @@ class ChargingService:
         log.info(f"Running command: {command}")
         command = f"tesla-control -ble -vin {settings.tesla_vin} -key-name  {settings.tesla_key_name} {command}"
         try:
+            # Tesla uses 20 seconds as a timeout, but we need to catch it before that
             subprocess.run(command, shell=True, check=True, timeout=19)
         except subprocess.TimeoutExpired:
             log.info("Command timed out, car might be unreachable")
